@@ -18,7 +18,7 @@ db_name = "iotsec"
 
 # string to insert data row
 add_metric = "INSERT INTO metrics " + \
-             "(name, source, value, time) " + \
+             "(name, source, value, datetime) " + \
              "VALUES (%s, %s, %s, %s)"
 
 
@@ -76,6 +76,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             cursor.execute(add_metric, data)
 
             cnx.commit()
+            cursor.close()
 
     do_POST = do_GET
     do_PUT = do_GET
@@ -104,12 +105,13 @@ def main():
     port = 8080
     print('Listening on localhost:%s' % port)
     # Must specify IP to open connection to external devices
-    # server = HTTPServer(('192.168.1.100', port), RequestHandler)
-    server = HTTPServer(('', port), RequestHandler)
-    server.socket = wrap_socket(server.socket, server_side=True,
-                                certfile='certs/mycert.pem')
+    server = HTTPServer(('192.168.43.244', port), RequestHandler)
+    # server = HTTPServer(('', port), RequestHandler)
+    # server.socket = wrap_socket(server.socket, server_side=True,
+    #                             certfile='certs/mycert.pem')
     server.serve_forever()
 
 
 if __name__ == "__main__":
     main()
+    cnx.close()
