@@ -1,4 +1,8 @@
 #include <LiquidCrystal.h>
+#include <SPI.h>
+#include <WiFi.h>
+
+// KEYPAD Globals
 #define redLED 10 //define the LED pins
 #define greenLED 11
 
@@ -13,47 +17,90 @@ const int cpin[]={5,4,3,2};
 
 String password = "1234";      // deactivation sequence
 String input = "";             // user input string
-String lock_command = "ABC";   // activation sequence
+String lock_command = "AB";   // activation sequence
 int key_position = 0;          // last input key position
 int lock = true;
 
 LiquidCrystal lcd (A0, A1, A2, A3, A4, A5);
 
-void setup()
-{
+// WIFI Globals
+
+char ssid[] = "Carrinha SIS #42"; //  your network SSID (name)
+char pass[] = "superpassword";    // your network password (use for WPA, or use as key for WEP)
+int keyIndex = 0;            // your network key Index number (needed only for WEP)
+
+int status = WL_IDLE_STATUS;
+char server[] = "192.168.43.244";    // name address for data server
+int port = 8080;
+
+WiFiClient client;
+
+
+void setup() {
+
+  // SERIAL Setup
   Serial.begin(9600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
   Serial.println("Program starting"); 
-  for(int i=0;i<4;i++)
-  {
-//Should be INPUT_PULLUP and OUTPUT
+
+
+  // KEYPAD Setup
+  for(int i=0;i<4;i++) {
     pinMode(rpin[i],OUTPUT);
     pinMode(cpin[i],INPUT_PULLUP);
   }
   lcd.begin(16, 2);
   pinMode(redLED, OUTPUT);  //set the LED as an output
   pinMode(greenLED, OUTPUT);
-  setLocked (true); //state of the password
+
+
+  // WIFI Setup
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present");
+    while (true); // Stop here.
+  }
+
+  String fv = WiFi.firmwareVersion();
+  if (fv != "1.1.0") {
+    Serial.println("Please upgrade the firmware");
+  }
+
+  // Connect
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    status = WiFi.begin(ssid, pass);
+    delay(5000);
+  }
+  Serial.println("Connected to wifi");
+  printWifiStatus();
+
+
+  // Initial lock
+  locked();
+  
 }
-void loop()
-{
+void loop() {
   char key=getkey();
 
   if(key==0) {
    
   } // keyboard has malfuctions with these keys
   else if(key == '7' || key == '8' || key == '9' ||
-  key == '*' || key == '0' || key == '#'){
+  key == '*' || key == '0' || key == '#' || key == 'C'){
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("  Invalid Key!");
-    delay(1000);
+    delay(200);
     lcd.clear();
   } else {
     if (key_position < 16) {
       if (key == 'D' && key_position >= 0) {
         input.remove(input.length() - 1, input.length());
         key_position--;
-      } else {
+      } else if (key != 'D') {
         input.concat(key);
         key_position++;
       }
@@ -83,6 +130,7 @@ void loop()
       key_position = 0;
       
     }
+    updateLock();
   }
 
   if (input.length() > 0) {
@@ -107,8 +155,8 @@ void loop()
 
   delay(200);              // Also, consider debouncing. 
 }
-char getkey()
-{
+
+char getkey() {
   char key=0;
   for(int i=0;i<4;i++)
   {
@@ -128,8 +176,30 @@ void locked() {
     lcd.setCursor(0, 0);
     lcd.print("*** Locking ***");
     delay(3000);
-    setLocked (true);
+    setLocked(true);
+    send_locked();
     lcd.clear();
+}
+
+void send_locked() {
+  if (client.connect(server, port)) {
+    Serial.println("Connected and sending lock request!");
+    // Make a HTTP request:
+    client.println("GET /?key=t7XodejIrK35NQSdklCIjM7fyeKIx2&source=keypad&value=1");
+    client.print("Host: ");
+    client.println(server);
+    client.println("Connection: close");
+    client.println();
+  } else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("*** Unlocking ***");
+    lcd.setCursor(0, 1);
+    lcd.print("Server connecton failed!");
+    Serial.println("Server connecton failed!");
+    delay(3000);
+    setLocked(false);
+  }
 }
 
 void unlocked() {
@@ -137,18 +207,66 @@ void unlocked() {
     lcd.setCursor(0, 0);
     lcd.print("*** Unlocking ***");
     delay(3000);
-    setLocked (false);
+    setLocked(false);
+    send_unlocked();
     lcd.clear();
+}
+
+void send_unlocked() {
+  if (client.connect(server, port)) {
+    Serial.println("Connected and sending unlock request!");
+    // Make a HTTP request:
+    client.println("GET /?key=t7XodejIrK35NQSdklCIjM7fyeKIx2&source=keypad&value=0");
+    client.print("Host: ");
+    client.println(server);
+    client.println("Connection: close");
+    client.println();
+  } else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("*** Locking ***");
+    lcd.setCursor(0, 1);
+    lcd.print("Server connecton failed!");
+    Serial.println("Server connecton failed!");
+    delay(3000);
+    setLocked(true);
+  }
 }
 
 void setLocked(int locked){
   if(locked){
     digitalWrite(redLED, HIGH);
     digitalWrite(greenLED, LOW);
-    }
-    else{
-      digitalWrite(redLED, LOW);
-      digitalWrite(greenLED, HIGH);
-    }
-    lock = locked;
+  } else{
+    digitalWrite(redLED, LOW);
+    digitalWrite(greenLED, HIGH);
   }
+  lock = locked;
+}
+
+void updateLock() {
+  if(lock){
+    digitalWrite(redLED, HIGH);
+    digitalWrite(greenLED, LOW);
+  } else{
+    digitalWrite(redLED, LOW);
+    digitalWrite(greenLED, HIGH);
+  }
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+}
