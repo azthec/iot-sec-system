@@ -195,8 +195,8 @@ void send_locked() {
     lcd.setCursor(0, 0);
     lcd.print("*** Unlocking ***");
     lcd.setCursor(0, 1);
-    lcd.print("Server connecton failed!");
-    Serial.println("Server connecton failed!");
+    lcd.print("Connection fail!");
+    Serial.println("Connection fail!");
     delay(3000);
     setLocked(false);
   }
@@ -226,8 +226,8 @@ void send_unlocked() {
     lcd.setCursor(0, 0);
     lcd.print("*** Locking ***");
     lcd.setCursor(0, 1);
-    lcd.print("Server connecton failed!");
-    Serial.println("Server connecton failed!");
+    lcd.print("Connection fail!");
+    Serial.println("Connection fail!");
     delay(3000);
     setLocked(true);
   }
