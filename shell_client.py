@@ -6,10 +6,11 @@ from time import sleep
 monitors = ['1', '2']
 controller = '3'
 arduino_sources = {'1': ['distance', 'movement'],
-                   '2': ['distance', 'movement'],
+                   '2': ['distance', 'piezo'],
                    '3': ['keypad']}
 source_tresholds = {'distance': 20,
-                    'movement': 30}
+                    'movement': 180,
+                    'piezo': 0.02}
 db_user = 'arduino'
 db_pass = 'password'
 db_name = 'iotsec'
@@ -18,6 +19,9 @@ db_name = 'iotsec'
 query_latest_metric = "select * from metrics " + \
                       "where (name=%s and source=%s) " + \
                       "order by id desc limit 1;"
+query_latest_metrics = "select * from metrics " + \
+                      "where name=%s " + \
+                      "order by id desc limit 10;"
 query_latest_alarm = "select * from metrics " + \
                      "where (name=%s and source='keypad') " + \
                      "order by id desc limit 1;"
@@ -39,6 +43,21 @@ except connector.Error as err:
     else:
         print(err)
     exit(1)
+
+
+def set_alarm(state):
+    add_metric = "INSERT INTO metrics " + \
+                 "(name, source, value, datetime) " + \
+                 "VALUES (%s, %s, %s, %s)"
+    if state:
+        value = ALARM_ON
+    else:
+        value = ALARM_OFF
+    data = ('3', "keypad", value, datetime.now())
+    cursor = cnx.cursor()
+    cursor.execute(add_metric, data)
+    cnx.commit()
+    cursor.close()
 
 
 def heartbeat_source(name, source):
@@ -99,6 +118,22 @@ def alarm_state():
     return True
 
     cursor.close()
+
+
+def latests(name):
+    cursor = cnx.cursor()
+
+    data = (name,)
+    cursor.execute(query_latest_metrics, data)
+
+    result = []
+    # query ensures at most one entry in cursor
+    for (row, name, source, value, time) in cursor:
+        # TODO if data collection is more than 30 then change
+        result.append((name, source, value, time))
+
+    cursor.close()
+    return result
 
 
 def main():
